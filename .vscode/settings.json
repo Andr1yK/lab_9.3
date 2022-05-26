@@ -1,0 +1,20 @@
+{
+  "C_Cpp.errorSquiggles": "Disabled",
+  "files.associations": {
+    "chrono": "cpp",
+    "variant": "cpp",
+    "string": "cpp",
+    "istream": "cpp",
+    "__bit_reference": "cpp",
+    "__hash_table": "cpp",
+    "__string": "cpp",
+    "string_view": "cpp",
+    "unordered_map": "cpp",
+    "algorithm": "cpp",
+    "sstream": "cpp",
+    "iosfwd": "cpp",
+    "fstream": "cpp",
+    "ios": "cpp",
+    "filesystem": "cpp"
+  }
+}

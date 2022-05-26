@@ -1,10 +1,19 @@
-﻿#include <functional>
-#include <iostream>
+﻿#include <iostream>
 #include <fstream>
 #include <iomanip>
 #include <string>
 
 using namespace std;
+
+template <class T, class R>
+void log(T str, R name) {
+  cout << name << ": " << str << ';' << endl;
+}
+
+template <class T>
+void log(T str) {
+  cout << "LOG: " << str << ';' << endl;
+}
 
 struct Note {
   string fullName;
@@ -12,15 +21,19 @@ struct Note {
   int birthday[3];
 };
 
+int getLineCountInFile(const char* filename);
+
 void Fill(Note* notes, const int N);
 void Print(Note* notes, const int N = 1);
 
-void Sort(Note* notes, const int N, function<bool(Note, Note)> callback);
-
 int Search(Note* notes, const int N, const string tel);
+int SearchInFile(const char* filename, const string tel);
+
+void WriteToFileEnd(ofstream &toFile, Note note);
+void appendToFile(Note note, const char* filename);
 
 void SaveToFile(Note* notes, const int N, const char* filename);
-void LoadFromFile(Note*& notes, int& N, const char* filename);
+Note* LoadFromFile(const char* filename, unsigned int N, int startLine = 0);
 
 int main()
 {
@@ -29,10 +42,11 @@ int main()
   int N = 0;
   Note* notes = nullptr;
   Note* temp = nullptr;
+  Note* fromFileStore = nullptr;
 
   Note forAutoFill[10] = {
     {"Sheikh Barnard",    "380634161835", {14, 9,  2014} },
-    {"Atlanta Gall", "380925229621", {4,  12, 2020} },
+    {"Atlanta Gall",      "380925229621", {4, 12,  2020} },
     {"Uma Noble",         "380633648116", {21, 5,  1998} },
     {"Siddharth Ferry",   "380507585956", {7,  4,  1974} },
     {"Jaxon Leal",        "380506986742", {12, 8,  2000} },
@@ -42,8 +56,6 @@ int main()
     {"Anita Dominguez",   "380665919172", {1,  7,  2003} },
     {"Eathan Roach",      "380683038390", {7,  7,  2010} },
   };
-
-  function<bool(Note, Note)> callback;
 
   char filename[100];
 
@@ -57,10 +69,11 @@ int main()
     cout << " [1] - введення даних з клавіатури" << endl;
     cout << " [2] - автоматичне введення даних" << endl;
     cout << " [3] - вивід даних на екран" << endl;
-    cout << " [4] - фізичне впорядкування даних" << endl;
-    cout << " [5] - пошук за номером" << endl;
+    cout << " [4] - пошук за номером" << endl;
+    cout << " [5] - пошук за номером в файлі" << endl;
     cout << " [6] - зберегти дані в файл" << endl;
     cout << " [7] - загрузити дані з файлу" << endl;
+    cout << " [8] - додати дані в файл" << endl;
 
     cout << endl;
 
@@ -96,35 +109,25 @@ int main()
       break;
 
     case 4:
-      callback = [](Note c, Note p) -> bool {
-        int cYear = c.birthday[2],
-          pYear = p.birthday[2],
-          cMonth = c.birthday[1],
-          pMonth = p.birthday[1],
-          cDay = c.birthday[0],
-          pDay = p.birthday[0];
-
-        bool byYear = cYear > pYear;
-        bool byMonth = cYear == pYear 
-          && cMonth > pMonth;
-
-        bool byDay = cYear == pYear 
-          && cMonth == pMonth
-          && cDay > pDay;
-
-        return byYear || byMonth || byDay;
-      };
-
-      Sort(notes, N, callback);
-      break;
-
-    case 5:
       cin.get(); cin.sync();
 
       cout << " Введіть номер телефону: "; getline(cin, findTel);
 
       if ((findedIndex = Search(notes, N, findTel)) >= 0)
         Print(&notes[findedIndex]);
+      else
+        cout << "Запис з таким телефонним номером не знайдено" << endl;
+
+      break;
+    
+    case 5:
+      cin.get(); cin.sync();
+
+      cout << "Введіть ім'я файлу: "; cin.getline(filename, 99);
+      cout << " Введіть номер телефону: "; getline(cin, findTel);
+
+      if ((findedIndex = SearchInFile(filename, findTel)) >= 0)
+        Print(&(LoadFromFile(filename, 1, findedIndex)[0]));
       else
         cout << "Запис з таким телефонним номером не знайдено" << endl;
 
@@ -146,7 +149,25 @@ int main()
 
       cout << "Введіть ім'я файлу: "; cin.getline(filename, 99);
 
-      LoadFromFile(notes, N, filename);
+      N = getLineCountInFile(filename);
+
+      delete[] notes;
+      notes = LoadFromFile(filename, N);
+
+      break;
+
+    case 8:
+      cin.get();
+      cin.sync();
+
+      cout << "Введіть ім'я файлу: "; cin.getline(filename, 99);
+
+      delete[] temp;
+      temp = new Note[1];
+
+      Fill(temp, 1);
+
+      appendToFile(temp[0], filename);
 
       break;
 
@@ -224,26 +245,6 @@ void Print(Note* notes, const int N)
   cout << endl;
 }
 
-void Sort(Note* notes, const int N, function<bool(Note, Note)> callback)
-{
-  int countsSwap = 0;
-  do
-  {
-    countsSwap = 0;
-
-    for (int i = 1; i < N; i++) {
-      const Note current = notes[i];
-      const Note prev = notes[i - 1];
-
-      if (callback(current, prev)) {
-        countsSwap++;
-        notes[i - 1] = current;
-        notes[i] = prev;
-      }
-    }
-  } while (countsSwap > 0);
-}
-
 int Search(Note* notes, const int N, const string tel) {
   for (int i = 0; i < N; i++)
     if (notes[i].tel == tel)
@@ -252,27 +253,109 @@ int Search(Note* notes, const int N, const string tel) {
   return -1;
 }
 
-void SaveToFile(Note* notes, const int N, const char* filename)
-{
-  ofstream toFile(filename, ios::binary);
-  toFile.write((char*)&N, sizeof(N));
+int SearchInFile(const char* filename, const string tel) {
+  ifstream fromFile(filename);
 
-  for (int index = 0; index < N; index++)
-    toFile.write((char*)&notes[index], sizeof(Note));
-    
+  string currentTel;
+  string str;
+  int pos;
+
+  for (int index = 0; getline(fromFile, str); index++, pos = 0)
+  {
+    pos = str.find(", ", pos + 1);
+    currentTel.assign(str, pos + 2, str.find(", ", pos + 1) - pos - 2);
+
+    if (currentTel == tel) {
+      log(index);
+      return index;
+    }
+  }
+
+  return -1;
+}
+
+int getLineCountInFile(const char* filename) {
+  ifstream file(filename);
+  unsigned int count;
+  string line;
+  
+  for(count = 0; getline(file, line); count++);
+
+  file.close();
+
+  return count;
+}
+
+void appendToFile(Note note, const char* filename) {
+  ofstream toFile(filename, ios::app);
+
+  WriteToFileEnd(toFile, note);
+
   toFile.close();
 }
 
-void LoadFromFile(Note*& notes, int& N, const char* filename)
+void WriteToFileEnd(ofstream &toFile, Note note) {
+  int* date = note.birthday;
+
+  toFile << note.fullName << ", "
+    << note.tel << ", "
+    << date[0] << ", "
+    << date[1] << ", "
+    << date[2]
+    << endl;
+}
+
+void SaveToFile(Note* notes, const int N, const char* filename)
 {
-  ifstream fromFile(filename, ios::binary);
-  fromFile.read((char*)&N, sizeof(N));
+  ofstream toFile(filename, ios::in);
 
-  delete[] notes;
-  notes = new Note[N]; 
+  for (int index = 0; index < N; index++) {
+    WriteToFileEnd(toFile, notes[index]);
+  };
 
-  for (int i = 0; i < N; i++)
-    fromFile.read((char*)&notes[i], sizeof(Note));
+  toFile.close();
+}
+
+Note* LoadFromFile(const char* filename, unsigned int N, int startLine)
+{
+  ifstream fromFile(filename);
+  string str;
+
+  Note* notes = new Note[N];
+
+  int pos = 0;
+  int posEnd = 0;
+  int index = 0;
+  int currentLine = 0;
+
+  string tempLine;
+
+  while (getline(fromFile, str) && index < N)
+  {
+    currentLine++;
+    
+    if (currentLine <= startLine)
+      continue;
+
+    posEnd = str.find(", ", pos + 1);
+    notes[index].fullName.assign(str, pos, posEnd - pos);
+    pos = posEnd;
+
+    posEnd = str.find(", ", pos + 1);
+    notes[index].tel.assign(str, pos + 2, posEnd - pos - 2);
+    pos = posEnd;
+
+    for (int i = 0; i < 3; i++) {
+      posEnd = str.find(", ", pos + 1);
+      notes[index].birthday[i] = stoi(tempLine.assign(str, pos + 2, posEnd - pos - 2));
+      pos = posEnd;
+    }
+
+    index++;
+    pos = 0;
+  }
 
   fromFile.close();
+
+  return notes;
 }
